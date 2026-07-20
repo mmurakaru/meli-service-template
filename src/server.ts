@@ -13,6 +13,7 @@ import {
 import { registerExampleRoutes } from './modules/example/index.ts'
 import { makeAppRuntime } from './runtime/AppRuntime.ts'
 import { AppConfig } from './runtime/config.ts'
+import { registerErrorHandler } from './runtime/ErrorHandler.ts'
 import { Healthcheck } from './runtime/Healthcheck.ts'
 
 const JWT_SKIP_LIST = new Set(['/', '/health', '/documentation', '/documentation/openapi.json'])
@@ -28,7 +29,12 @@ async function main(): Promise<void> {
 
   await app.register(fastifyHelmet, isDevelopment ? { contentSecurityPolicy: false } : {})
   if (isDevelopment) {
-    await app.register(fastifyCors, { origin: '*' })
+    await app.register(fastifyCors, {
+      origin: '*',
+      credentials: true,
+      methods: ['GET', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Origin', 'X-Requested-With', 'Accept', 'Content-Type', 'Authorization'],
+    })
   }
 
   await app.register(fastifySwagger, {
@@ -47,15 +53,17 @@ async function main(): Promise<void> {
   await app.register(fastifyJWT, { secret: { public: config.app.jwtPublicKey } })
   app.addHook('onRequest', async (request, reply) => {
     const path = request.url.split('?')[0] ?? request.url
-    if (JWT_SKIP_LIST.has(path) || path.startsWith('/documentation')) {
+    if (JWT_SKIP_LIST.has(path) || path.startsWith('/documentation/')) {
       return
     }
     try {
       await request.jwtVerify()
     } catch {
-      return reply.status(401).send({ message: 'Unauthorized' })
+      return reply.status(401).send({ message: 'Unauthorized', code: 'UNAUTHORIZED' })
     }
   })
+
+  registerErrorHandler(app, runtime)
 
   app.get('/health', async (_request, reply) => {
     const report = await runtime.runPromise(

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { SqlError } from '@effect/sql'
 import { Context, Data, Effect, Layer, Option } from 'effect'
 import { ExampleJobQueue } from '../jobs/ExampleJob.ts'
@@ -35,8 +36,9 @@ export const ExampleServiceLive = Layer.effect(
       createItem: (name) =>
         Effect.gen(function* () {
           const id = yield* repository.insert(name)
+          const correlationId = randomUUID()
           yield* Effect.tryPromise({
-            try: () => queue.add('process-example-item', { itemId: id }),
+            try: () => queue.add('process-example-item', { itemId: id, correlationId }),
             catch: (cause) => new QueueUnavailable({ cause }),
           })
           yield* Effect.annotateCurrentSpan('exampleItem.id', id)

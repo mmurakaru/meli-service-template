@@ -7,7 +7,7 @@ import { ExampleRepository } from '../services/ExampleRepository.ts'
 
 export const EXAMPLE_QUEUE_NAME = 'example-items'
 
-export type ExampleJobPayload = { readonly itemId: string }
+export type ExampleJobPayload = { readonly itemId: string; readonly correlationId: string }
 
 export class ExampleJobQueue extends Context.Tag('ExampleJobQueue')<
   ExampleJobQueue,
@@ -61,7 +61,10 @@ export const ExampleWorkerLive: Layer.Layer<
         )
       }).pipe(
         reportFailures,
-        Effect.withSpan('ExampleJob.process', { attributes: { 'exampleItem.id': payload.itemId } }),
+        Effect.annotateLogs('correlationId', payload.correlationId),
+        Effect.withSpan('ExampleJob.process', {
+          attributes: { 'exampleItem.id': payload.itemId, correlationId: payload.correlationId },
+        }),
       )
 
     yield* Effect.acquireRelease(
