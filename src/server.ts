@@ -20,6 +20,8 @@ const JWT_SKIP_LIST = new Set(['/', '/health', '/documentation', '/documentation
 
 async function main(): Promise<void> {
   const runtime = makeAppRuntime()
+  // Reading config forces the whole runtime to build: the BullMQ worker starts
+  // consuming and the Prometheus port binds here, before app.listen below.
   const config = await runtime.runPromise(AppConfig)
   const isDevelopment = config.app.nodeEnv === 'development'
 
@@ -78,7 +80,12 @@ async function main(): Promise<void> {
   registerExampleRoutes(app, runtime)
   // registerNextModuleRoutes(app, runtime) - new modules add one line here
 
+  let shuttingDown = false
   const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) {
+      return
+    }
+    shuttingDown = true
     await runtime.runPromise(Effect.logInfo(`Received ${signal}, shutting down`))
     await app.close()
     await runtime.dispose()
