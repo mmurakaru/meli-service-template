@@ -5,14 +5,15 @@ import { ExampleServiceLive } from './services/ExampleService.ts'
 
 /**
  * The module's public surface: its composed Layer, its route registrar, and the
- * Tags other modules may depend on. Everything not exported here is
- * module-private (ExampleRepository, the job internals).
+ * Tags other modules may depend on. The repository and job queue are built once
+ * as internals and provided inward to the service and worker, so a single
+ * instance of each is shared within the module and neither enters the
+ * application context - they stay module-private.
  */
-export const ExampleModuleLive = Layer.mergeAll(
-  ExampleServiceLive.pipe(
-    Layer.provideMerge(Layer.merge(ExampleRepositoryLive, ExampleJobQueueLive)),
-  ),
-  ExampleWorkerLive.pipe(Layer.provide(ExampleRepositoryLive)),
+const ModuleInternalsLive = Layer.merge(ExampleRepositoryLive, ExampleJobQueueLive)
+
+export const ExampleModuleLive = Layer.mergeAll(ExampleServiceLive, ExampleWorkerLive).pipe(
+  Layer.provide(ModuleInternalsLive),
 )
 
 export { registerExampleRoutes } from './http/exampleRoutes.ts'
